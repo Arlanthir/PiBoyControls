@@ -241,26 +241,28 @@ static void gc_timer(struct timer_list *t)
 
 		lastgood++;
 
-		input_report_abs(dev, ABS_X, (int16_t)data[1]);		//X Axis
-		input_report_abs(dev, ABS_Y, (int16_t)data[2]);		//Y Axis
+		if (dev) {
+			input_report_abs(dev, ABS_X, (int16_t)data[1]);		//X Axis
+			input_report_abs(dev, ABS_Y, (int16_t)data[2]);		//Y Axis
 
-		input_report_key(dev, gc_btn[0], !(data[3]&0x01));	//A
-		input_report_key(dev, gc_btn[1], !(data[3]&0x02));	//B
-		input_report_key(dev, gc_btn[2], !(data[3]&0x04));	//C
-		input_report_key(dev, gc_btn[3], !(data[3]&0x08));	//X
-		input_report_key(dev, gc_btn[4], !(data[3]&0x10));	//Y
-		input_report_key(dev, gc_btn[5], !(data[3]&0x20));	//Z
-		input_report_key(dev, gc_btn[6], data[3]&0x40);		//Select
-		input_report_key(dev, gc_btn[7], data[3]&0x80); 	//Start
-		input_report_key(dev, gc_btn[8], data[4]&0x40);		//Left Thumb
-		input_report_key(dev, gc_btn[9], data[4]&0x01);		//DPAD Up
-		input_report_key(dev, gc_btn[10], data[4]&0x02);	//DPAD Down
-		input_report_key(dev, gc_btn[11], data[4]&0x04);	//DPAD Left
-		input_report_key(dev, gc_btn[12], data[4]&0x08);	//DPAD Right
-		input_report_key(dev, gc_btn[13], data[4]&0x10);	//Left Shoulder
-		input_report_key(dev, gc_btn[14], data[4]&0x20);	//Right Shoulder
+			input_report_key(dev, gc_btn[0], !(data[3]&0x01));	//A
+			input_report_key(dev, gc_btn[1], !(data[3]&0x02));	//B
+			input_report_key(dev, gc_btn[2], !(data[3]&0x04));	//C
+			input_report_key(dev, gc_btn[3], !(data[3]&0x08));	//X
+			input_report_key(dev, gc_btn[4], !(data[3]&0x10));	//Y
+			input_report_key(dev, gc_btn[5], !(data[3]&0x20));	//Z
+			input_report_key(dev, gc_btn[6], data[3]&0x40);		//Select
+			input_report_key(dev, gc_btn[7], data[3]&0x80); 	//Start
+			input_report_key(dev, gc_btn[8], data[4]&0x40);		//Left Thumb
+			input_report_key(dev, gc_btn[9], data[4]&0x01);		//DPAD Up
+			input_report_key(dev, gc_btn[10], data[4]&0x02);	//DPAD Down
+			input_report_key(dev, gc_btn[11], data[4]&0x04);	//DPAD Left
+			input_report_key(dev, gc_btn[12], data[4]&0x08);	//DPAD Right
+			input_report_key(dev, gc_btn[13], data[4]&0x10);	//Left Shoulder
+			input_report_key(dev, gc_btn[14], data[4]&0x20);	//Right Shoulder
 
-		input_sync(dev);
+			input_sync(dev);
+		}
 
 		batt_val = (int)(data[7]*5)+2950;		//Battery Voltage
 		cur_val = (int)((signed char)data[8])*50;	//Current
@@ -340,6 +342,7 @@ static struct gc __init *gc_probe(void)
 {
 	struct gc *gc;
 	int err;
+	int register_gamepad;
 
 	gc = kzalloc(sizeof(struct gc), GFP_KERNEL);
 	if (!gc) {
@@ -352,8 +355,21 @@ static struct gc __init *gc_probe(void)
 
 	timer_setup(&gc->timer, gc_timer, 0);
 
-	err = gc_setup_pad(gc);
-	if (err) goto err_unreg_devs;
+	//state 0x400000 [LCD], 640x480 @ 0.00Hz, progressive
+	//state 0xa [HDMI CUSTOM RGB lim 16:9], 1280x720 @ 60.00Hz, progressive
+
+	register_gamepad = 0;
+	if (register_gamepad) {
+		printk(KERN_INFO "XPi Gamecon: Decided to register gamepad\n");
+		err = gc_setup_pad(gc);
+		if (err) goto err_unreg_devs;
+	} else {
+		printk(KERN_INFO "XPi Gamecon: Decided not to register gamepad\n");
+		gc->dev = NULL;
+		/* set data pin to input */
+		gpio_func(gc_gpio_clk,0);	//output
+		gpio_func(gc_gpio_data,1);	//input
+	}
 	return gc;
 
  err_unreg_devs:
